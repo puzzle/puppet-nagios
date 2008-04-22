@@ -103,7 +103,7 @@ class nagios::base {
 
 	
 
-    include munin::plugin::nagios
+    include munin::plugins::nagios
 } # end nagios::base
 
 class nagios::debian inherits nagios::base {
