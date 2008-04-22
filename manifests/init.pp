@@ -71,7 +71,6 @@ class nagios::base {
 		# from ssh.pp
 		ssh_port:
 			command_line => '/usr/lib/nagios/plugins/check_ssh -p $ARG1$ $HOSTADDRESS$';
-F
 		# from apache2.pp
 		http_port:
 			command_line => '/usr/lib/nagios/plugins/check_http -p $ARG1$ -H $HOSTADDRESS$ -I $HOSTADDRESS$';
