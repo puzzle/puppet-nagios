@@ -89,7 +89,8 @@ class nagios::base {
         "$etc_nagios_path/hosts.cfg":
             source => [
                 "puppet://$server/files/nagios/hosts.cfg",
-                "puppet://$server/nagios/hosts.cfg"
+                "puppet://$server/nagios/hosts.cfg",
+                "puppet://$server/nagios/hostgroups_nagios2.cfg",
             ],
             mode => 0644, owner => nagios, group => nagios;
     }
