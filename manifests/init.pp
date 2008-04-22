@@ -17,7 +17,21 @@ class nagios {
     }
 }
 
+class nagios::vars {
+    case $operatingsystem {
+        debian: {
+            $etc_nagios_path =  "/etc/nagios2"
+            }
+        default: {
+            $etc_nagios_path =  "/etc/nagios"
+        }
+    }
+}
+
 class nagios::base {
+
+    # needs apache to work
+    include apache
 
     package { nagios:
         ensure => present,   
@@ -52,18 +66,12 @@ class nagios::base {
             mode => 0755,
     }
 
-	define command($command_line) {
-		file { "$nagios_cfgdir/hosts.d/${name}_command.cfg":
-				ensure => present, content => template( "nagios/command.erb" ),
-				mode => 644, owner => root, group => root,
-				notify => Service[nagios],
-		}
-	}
-
+	
 	nagios::command {
 		# from ssh.pp
 		ssh_port:
 			command_line => '/usr/lib/nagios/plugins/check_ssh -p $ARG1$ $HOSTADDRESS$';
+F
 		# from apache2.pp
 		http_port:
 			command_line => '/usr/lib/nagios/plugins/check_http -p $ARG1$ -H $HOSTADDRESS$ -I $HOSTADDRESS$';
@@ -74,46 +82,7 @@ class nagios::base {
 		check_dig2: command_line => '/usr/lib/nagios/plugins/check_dig -H $HOSTADDRESS$ -l $ARG1$ --record_type=$ARG2$'
 	}
     
-	define host($ip = $fqdn, $short_alias = $fqdn) {
-		@@file {
-			"$nagios_cfgdir/hosts.d/${name}_host.cfg":
-				ensure => present, content => template( "nagios/host.erb" ),
-				mode => 644, owner => root, group => root,
-				tag => 'nagios'
-		}
-	}
 
-	define service($check_command = '', 
-		$nagios_host_name = $fqdn, $nagios_description = '')
-	{
-		# this is required to pass nagios' internal checks:
-		# every service needs to have a defined host
-		include nagios::target
-		$real_check_command = $check_command ? {
-			'' => $name,
-			default => $check_command
-		}
-		$real_nagios_description = $nagios_description ? {
-			'' => $name,
-			default => $nagios_description
-		}
-		@@file {
-			"$nagios_cfgdir/hosts.d/${nagios_host_name}_${name}_service.cfg":
-				ensure => present, content => template( "nagios/service.erb" ),
-				mode => 644, owner => root, group => root,
-				tag => 'nagios'
-		}
-	}
-
-	define extra_host($ip = $fqdn, $short_alias = $fqdn, $parent = "none") {
-		$nagios_parent = $parent
-		file {
-			"$nagios_cfgdir/hosts.d/${name}_host.cfg":
-				ensure => present, content => template( "nagios/host.erb" ),
-				mode => 644, owner => root, group => root,
-				notify => Service[nagios],
-		}
-	}
 
     # additional hosts
     
@@ -133,17 +102,9 @@ class nagios::base {
             mode => 0644, owner => nagios, group => nagios;
     }
 
-	# include this class in every host that should be monitored by nagios
-	class target {
-		nagios::host { $fqdn: }
-		debug ( "$fqdn has $nagios_parent as parent" )
-	}
-	munin::plugin {
-		nagios_hosts: script_path => "/usr/local/bin", config => 'user root';
-		nagios_svc: script_path => "/usr/local/bin", config => 'user root';
-		nagios_perf_hosts: ensure => nagios_perf_, script_path => "/usr/local/bin", config => 'user root';
-		nagios_perf_svc: ensure => nagios_perf_, script_path => "/usr/local/bin", config => 'user root';
-	}
+	
+
+    include munin::plugin::nagios
 } # end nagios::base
 
 class nagios::debian inherits nagios::base {
@@ -223,13 +184,59 @@ class nagios::centos inherits nagios::base {
     
 }
 
-class nagios::vars {
-    case $operatingsystem {
-        debian: {
-            $etc_nagios_path =  "/etc/nagios2"
-            }
-        default: {
-            $etc_nagios_path =  "/etc/nagios"
-        }
+# include this class in every host that should be monitored by nagios
+class nagios::target {
+    nagios::host { $fqdn: }
+	debug ( "$fqdn has $nagios_parent as parent" )
+}
+
+# defines
+define nagios::host($ip = $fqdn, $short_alias = $fqdn) {
+		@@file {
+			"$nagios_cfgdir/hosts.d/${name}_host.cfg":
+				ensure => present, content => template( "nagios/host.erb" ),
+				mode => 644, owner => root, group => root,
+				tag => 'nagios'
+		}
+	}
+
+define nagios::service(
+    $check_command = '', 
+	$nagios_host_name = $fqdn, 
+    $nagios_description = '' ){
+
+	# this is required to pass nagios' internal checks:
+	# every service needs to have a defined host
+	include nagios::target
+	$real_check_command = $check_command ? {
+		'' => $name,
+	    default => $check_command
+	}
+	$real_nagios_description = $nagios_description ? {
+		'' => $name,
+	    default => $nagios_description
+	}
+	@@file {"$nagios_cfgdir/hosts.d/${nagios_host_name}_${name}_service.cfg":
+		ensure => present, content => template( "nagios/service.erb" ),
+		mode => 644, owner => root, group => root,
+	    tag => 'nagios'
     }
 }
+
+define nagios::extra_host($ip = $fqdn, $short_alias = $fqdn, $parent = "none") {
+    $nagios_parent = $parent
+	file {"$nagios_cfgdir/hosts.d/${name}_host.cfg":
+		ensure => present, content => template( "nagios/host.erb" ),
+		mode => 644, owner => root, group => root,
+		notify => Service[nagios],
+    }
+}
+
+define nagios::command($command_line) {
+    file { "$nagios_cfgdir/hosts.d/${name}_command.cfg":
+	    ensure => present, content => template( "nagios/command.erb" ),
+		mode => 644, owner => root, group => root,
+		notify => Service[nagios],
+	}
+}
+
