@@ -242,11 +242,6 @@ define nagios::service(
     $nagios_contact_groups_in = $nagios_contact_groups,
     $service_description = ''){
 
-define nagios::service(
-    $check_command = '', 
-	$nagios_host_name = $fqdn, 
-    $nagios_description = '' ){
-
     # this is required to pass nagios' internal checks:
     # every service needs to have a defined host
     include nagios::target::host
@@ -255,7 +250,6 @@ define nagios::service(
         '' => 'admins',
         default => $nagios_contact_groups_in
     }
-}
     @@nagios_service {$name:
         check_command => $check_command,
         use => $use,
