@@ -6,25 +6,13 @@
 
 
 # the directory containing all nagios configs:
-$nagios_cfgdir = "/var/lib/puppet/modules/nagios"
+$nagios_cfgdir = '/var/lib/puppet/modules/nagios'
 modules_dir{ nagios: }
 
 class nagios {
     case $operatingsystem {
-        debian: { include nagios::debian }
         centos: { include nagios::centos }
-        default: { include nagios::base }
-    }
-}
-
-class nagios::vars {
-    case $operatingsystem {
-        debian: {
-            $etc_nagios_path =  "/etc/nagios2"
-            }
-        default: {
-            $etc_nagios_path =  "/etc/nagios"
-        }
+        default: { fail("No such operatingsystem: $operatingsystem yet defined") }
     }
 }
 
@@ -44,199 +32,263 @@ class nagios::base {
         require => Package[nagios],
     }
 
-    include nagios::vars
-	
-	# import the various definitions
-	File <<| tag == 'nagios' |>>
-
-    file {
-		"$etc_nagios_path/htpasswd.users":
+    # manage nagios cfg files
+    file {nagios_cfg_dir:
+        path => "/etc/nagios/",
+        source => "puppet://$server/nagios/empty",
+        ensure => directory,
+        recurse => true,
+        purge => true,
+        notify => Service[nagios],
+        mode => 0755, owner => root, group => root;
+    }
+    # this file should contain all the nagios_puppet-paths:
+    file {nagios_main_cfg: 
+            path => "/etc/nagios/nagios.cfg",
+			source => [ "puppet://$server/files/nagios/configs/${fqdn}/nagios.cfg",
+                        "puppet://$server/files/nagios/configs/${operatingsystem}/nagios.cfg",
+                        "puppet://$server/files/nagios/configs/nagios.cfg",
+                        "puppet://$server/nagios/configs/${operatingsystem}/nagios.cfg",
+                        "puppet://$server/nagios/configs/nagios.cfg" ],
+            notify => Service[nagios],
+            mode => 0644, owner => root, group => root;
+    }    
+    file { nagios_cgi_cfg:
+        path => "/etc/nagios/cgi.cfg",
+        source => [ "puppet://$server/files/nagios/configs/${fqdn}/cgi.cfg",
+                    "puppet://$server/files/nagios/configs/${operatingsystem}/cgi.cfg",
+                    "puppet://$server/files/nagios/configs/cgi.cfg",
+                    "puppet://$server/nagios/configs/${operatingsystem}/cgi.cfg",
+                    "puppet://$server/nagios/configs/cgi.cfg" ],
+        owner => 'root',
+        group => 0,
+        mode => '0644',
+        notify => Service['apache'],
+    }
+    
+	file {"/etc/nagios/htpasswd.users":
             source => [
                 "puppet://$server/files/nagios/htpasswd.users",
-                "puppet://$server/nagios/htpasswd.users"
-            ],
+                "puppet://$server/nagios/htpasswd.users" ],
             mode => 0640, owner => root, group => apache;
     }
-    
-    file {
-        "$nagios_cfgdir/hosts.d":
-            ensure => directory,
-            owner => root,
-            group => root,
-            mode => 0755,
+
+    file{[ "/etc/nagios/nagios_command.cfg", 
+           "/etc/nagios/nagios_contact.cfg", 
+           "/etc/nagios/nagios_contactgroup.cfg",
+           "/etc/nagios/nagios_host.cfg",
+           "/etc/nagios/nagios_hostextinfo.cfg",
+           "/etc/nagios/nagios_hostgroup.cfg",
+           "/etc/nagios/nagios_hostgroupescalation.cfg",
+           "/etc/nagios/nagios_service.cfg",
+           "/etc/nagios/nagios_servicedependency.cfg",
+           "/etc/nagios/nagios_serviceescalation.cfg",
+           "/etc/nagios/nagios_serviceextinfo.cfg",
+           "/etc/nagios/nagios_timeperdiod.cfg" ]:
+        ensure => file,
+        replace => false,
+        notify => Service[nagios],
+        mode => 0644, owner => root, group => 0;
     }
 
-	
-	nagios::command {
-		# from ssh.pp
-		ssh_port:
-			command_line => '/usr/lib/nagios/plugins/check_ssh -p $ARG1$ $HOSTADDRESS$';
+    nagios_command{
+        ssh_port:
+			command_line => '$USER1/check_ssh -p $ARG1$ $HOSTADDRESS$';
 		# from apache2.pp
 		http_port:
-			command_line => '/usr/lib/nagios/plugins/check_http -p $ARG1$ -H $HOSTADDRESS$ -I $HOSTADDRESS$';
+			command_line => '$USER1/check_http -p $ARG1$ -H $HOSTADDRESS$ -I $HOSTADDRESS$';
 		# from bind.pp
-		nameserver: command_line => '/usr/lib/nagios/plugins/check_dns -H www.edv-bus.at -s $HOSTADDRESS$';
-		# TODO: debug this, produces copious false positives:
-		# check_dig2: command_line => '/usr/lib/nagios/plugins/check_dig -H $HOSTADDRESS$ -l $ARG1$ --record_type=$ARG2$ --expected_address=$ARG3$ --warning=2.0 --critical=4.0';
-		check_dig2: command_line => '/usr/lib/nagios/plugins/check_dig -H $HOSTADDRESS$ -l $ARG1$ --record_type=$ARG2$'
+		check_dig2: 
+            command_line => '$USER1/check_dig -H $HOSTADDRESS$ -l $ARG1$ --record_type=$ARG2$';
+        check_ntp:
+            command_line => '$USER1/check_ntp -H $HOSTADDRESS$ -w 0.5 -c 1 -j -1:100 -k -1:200';
 	}
-    
 
+    Nagios_command <<||>>
+    Nagios_contact <<||>>
+    Nagios_contactgroup <<||>>
+    Nagios_host <<||>>
+    Nagios_hostextinfo <<||>>
+    Nagios_hostgroup <<||>>
+    Nagios_hostgroupescalation <<||>>
+    Nagios_service <<||>>
+    Nagios_servicedependency <<||>>
+    Nagios_serviceescalation <<||>>
+    Nagios_serviceextinfo <<||>>
+    Nagios_timeperiod <<||>>
 
-    # additional hosts
-    
-    file {
-        "$etc_nagios_path/hosts.cfg":
-            source => [
-                "puppet://$server/files/nagios/hosts.cfg",
-                "puppet://$server/nagios/hosts.cfg",
-                "puppet://$server/nagios/hostgroups_nagios2.cfg"
-            ],
-            mode => 0644, owner => nagios, group => nagios;
+    if defined(Class["munin::client"]) {
+        include munin::plugins::nagios
     }
-
-    # nagios cfg includes $nagios_cfgdir/hosts.d
-    file {
-        "$etc_nagios_path/nagios.cfg":
-			ensure => present, content => template( "nagios/nagioscfg.erb" ),
-            mode => 0644, owner => nagios, group => nagios;
-    }
-
-	
-
-    include munin::plugins::nagios
 } # end nagios::base
 
-class nagios::debian inherits nagios::base {
-    Package [nagios]{
-            name => "nagios2",
-    }
-    package {
-        "nagios-plugins-standard":
-            ensure => installed,
-    }
-	Service[nagios] {
-			# Current Debian/etch pattern
-			pattern => "/usr/sbin/nagios2 -d /etc/nagios2/nagios.cfg",
-			subscribe => File [ $nagios_cfgdir ]
-	}
-    File["$etc_nagios_path/htpasswd.users"]{
-        group => www-data,
-    }
-
-    file {
-        [ "/etc/nagios2/conf.d/localhost_nagios2.cfg",
-          "/etc/nagios2/conf.d/extinfo_nagios2.cfg",
-          "/etc/nagios2/conf.d/services_nagios2.cfg" ]:
-            ensure => absent,
-            notify => Service[nagios];
-    }
-	# permit external commands from the CGI
-    file {
-       "/var/lib/nagios2":
-            ensure => directory, mode => 751,
-            owner => nagios, group => nagios,
-            notify => Service[nagios];
-    }
-    file{
-        "/var/lib/nagios2/rw":
-            ensure => directory, mode => 2710,
-            owner => nagios, group => www-data,
-            notify => Service[nagios];
-
-    }
-	
-	# TODO: these are not very robust!
-	replace {
-		# Debian installs a default check for the localhost. Since VServers
-		# usually have no localhost IP, this fixes the definition to check the
-		# real IP
-		fix_default_config:
-			file => "/etc/nagios2/conf.d/localhost_nagios2.cfg",
-			pattern => "address *127.0.0.1",
-			replacement => "address $ipaddress",
-			notify => Service[nagios];
-		# enable external commands from the CGI
-		enable_extcommands:
-			file => "/etc/nagios2/nagios.cfg",
-			pattern => "check_external_commands=0",
-			replacement => "check_external_commands=1",
-			notify => Service[nagios];
-		# put a cap on service checks
-		cap_service_checks:
-			file => "/etc/nagios2/nagios.cfg",
-			pattern => "max_concurrent_checks=0",
-			replacement => "max_concurrent_checks=30",
-			notify => Service[nagios];
-	}
-    
-}
-# end nagios::debian
-
 class nagios::centos inherits nagios::base {
-    package { [ 'nagios-plugins-smtp','nagios-plugins-http', 'nagios-plugins-ssh', 'nagios-plugins-udp', 'nagios-plugins-tcp', 'nagios-plugins-dig', 'nagios-plugins-nrpe', 'nagios-plugins-load', 'nagios-plugins-dns', 'nagios-plugins-ping', 'nagios-plugins-procs', 'nagios-plugins-users', 'nagios-plugins-ldap', 'nagios-plugins-disk', 'nagios-devel', 'nagios-plugins-swap', 'nagios-plugins-nagios', 'nagios-plugins-perl' ]:
+    package { [ 'nagios-plugins-smtp','nagios-plugins-http', 'nagios-plugins-ssh', 'nagios-plugins-udp', 'nagios-plugins-tcp', 'nagios-plugins-dig', 'nagios-plugins-nrpe', 'nagios-plugins-load', 'nagios-plugins-dns', 'nagios-plugins-ping', 'nagios-plugins-procs', 'nagios-plugins-users', 'nagios-plugins-ldap', 'nagios-plugins-disk', 'nagios-devel', 'nagios-plugins-swap', 'nagios-plugins-nagios', 'nagios-plugins-perl', 'nagios-plugins-ntp', 'nagios-plugins-snmp' ]:
         ensure => 'present',
+        before => Service[nagios],
     }
 
     Service[nagios]{
         hasstatus => true,
     }
-    
+
+    # default cmd file from rpm
+    # don't forget it to add to the puppet paths
+    file { nagios_commands_cfg:
+        path => "/etc/nagios/commands.cfg",
+        source => [ "puppet://$server/files/nagios/configs/${fqdn}/commands.cfg",
+                    "puppet://$server/files/nagios/configs/${operatingsystem}/commands.cfg",
+                    "puppet://$server/nagios/configs/${operatingsystem}/commands.cfg" ],
+        owner => 'root',
+        group => 0,
+        mode => '0644',
+        notify => Service['apache'],
+    }
+    # default file from rpm
+    file { nagios_localhost_cfg:
+        path => "/etc/nagios/localhost.cfg",
+        source => [ "puppet://$server/files/nagios/configs/${fqdn}/localhost.cfg",
+                    "puppet://$server/files/nagios/configs/${operatingsystem}/localhost.cfg",
+                    "puppet://$server/nagios/configs/${operatingsystem}/localhost.cfg" ],
+        owner => 'root',
+        group => 0,
+        mode => '0644',
+        notify => Service['apache'],
+    }
+    file{"/etc/nagios/private/":
+        source => "puppet://$server/nagios/empty",
+        ensure => directory,
+        purge => true,
+        recurse => true,
+        mode => '0750', owner => root, group => nagios;
+    }
+    file{"/etc/nagios/private/resource.cfg":
+        source => "puppet://$server/nagios/configs/${operatingsystem}/private/resource.cfg.${architecture}",
+        owner => root, group => nagios, mode => '0640';
+    }
 }
 
-# include this class in every host that should be monitored by nagios
 class nagios::target {
-    nagios::host { $fqdn: }
-	debug ( "$fqdn has $nagios_parent as parent" )
+    include nagios::target::host
+    nagios::service::ping{$fqdn:}
+}
+
+class nagios::target::host {
+    nagios::host { $fqdn: parents => $nagios_parent }
 }
 
 # defines
-define nagios::host($ip = $fqdn, $short_alias = $fqdn) {
-		@@file {
-			"$nagios_cfgdir/hosts.d/${name}_host.cfg":
-				ensure => present, content => template( "nagios/host.erb" ),
-				mode => 644, owner => root, group => root,
-				tag => 'nagios'
-		}
-	}
+define nagios::host(
+    $ip = $fqdn, 
+    $nagios_alias = $hostname, 
+    $max_check_attempts = 4,
+    $notification_interval = 120,
+    $use = 'generic-host', 
+    $nagios_contact_groups_in = $nagios_contact_groups,
+    $parents = 'localhost' ) 
+{
+    $real_nagios_contact_groups = $nagios_contact_groups_in ? {
+        '' => 'admins',
+        default => $nagios_contact_groups_in
+    }
+    $real_nagios_parents = $parents ? {
+        '' => 'localhost',
+        default => $parents
+    }
+    
+    @@nagios_host { $name:
+        ensure => present,
+        address => $ip,
+        alias => $nagios_alias,
+        max_check_attempts => $max_check_attempts,
+        notification_interval => $notification_interval,
+        parents => $real_nagios_parents,
+        contact_groups => $real_nagios_contact_groups,
+        use => $use,
+    }
+}
+
+# this will define a host which isn't managed by puppet. 
+# a ping serivce is automatically added
+# please note:
+# - you can use it only on the nagios master (no exported resources)
+# - you can not use this host for any other services!
+define nagios::extra_host($ip, $nagios_alias, $host_use = 'generic-host', $parents = 'localhost' ) {
+    nagios::host{$name:
+        ip => $ip, 
+        nagios_alias => $nagios_alias, 
+        use => $use, 
+        parents => $parents 
+    }
+    nagios_service { "check_ping_${name}":
+        check_command => "check_ping!100.0,20%!500.0,60%",
+        use => "generic-service",
+        host_name => $ip,
+        notification_period => "24x7",
+        service_description => "${alias}_check_ping"
+   }
+}
+
+define nagios::service(
+    $check_command, 
+	$host_name = $fqdn, 
+    $use = 'generic-service',
+    $notification_period = "24x7",
+    $max_check_attempts = 4,
+    $retry_check_interval = 1,
+    $notification_interval = 960,
+    $normal_check_interval = 5,
+    $check_period = "24x7",
+    $nagios_contact_groups_in = $nagios_contact_groups,
+    $service_description = ''){
 
 define nagios::service(
     $check_command = '', 
 	$nagios_host_name = $fqdn, 
     $nagios_description = '' ){
 
-	# this is required to pass nagios' internal checks:
-	# every service needs to have a defined host
-	include nagios::target
-	$real_check_command = $check_command ? {
-		'' => $name,
-	    default => $check_command
-	}
-	$real_nagios_description = $nagios_description ? {
-		'' => $name,
-	    default => $nagios_description
-	}
-	@@file {"$nagios_cfgdir/hosts.d/${nagios_host_name}_${name}_service.cfg":
-		ensure => present, content => template( "nagios/service.erb" ),
-		mode => 644, owner => root, group => root,
-	    tag => 'nagios'
+    # this is required to pass nagios' internal checks:
+    # every service needs to have a defined host
+    include nagios::target::host
+
+    $real_nagios_contact_groups = $nagios_contact_groups_in ? {
+        '' => 'admins',
+        default => $nagios_contact_groups_in
+    }
+}
+    @@nagios_service {$name:
+        check_command => $check_command,
+        use => $use,
+        host_name => $host_name,
+        notification_period => $notification_period,
+        max_check_attempts => $max_check_attempts,
+        retry_check_interval => $retry_check_interval,
+        notification_interval => $notification_interval,
+        normal_check_interval => $normal_check_interval,
+        contact_groups => $real_nagios_contact_groups,
+        check_period => $check_period,
+    }
+    # if no service_description is set it is a namevar
+    case $service_description {
+        '': {}
+        default: {
+            Nagios_service[$name]{
+                service_description => $service_description,
+            }
+        }
     }
 }
 
-define nagios::extra_host($ip = $fqdn, $short_alias = $fqdn, $parent = "none") {
-    $nagios_parent = $parent
-	file {"$nagios_cfgdir/hosts.d/${name}_host.cfg":
-		ensure => present, content => template( "nagios/host.erb" ),
-		mode => 644, owner => root, group => root,
-		notify => Service[nagios],
+define nagios::service::ping($host_name = $hostname ){
+    nagios::service{ "check_ping_${hostname}":
+        check_command => "check_ping!100.0,20%!500.0,60%",
+        host_name => $host_name,
     }
 }
 
-define nagios::command($command_line) {
-    file { "$nagios_cfgdir/hosts.d/${name}_command.cfg":
-	    ensure => present, content => template( "nagios/command.erb" ),
-		mode => 644, owner => root, group => root,
-		notify => Service[nagios],
-	}
+class nagios::service::ntp {
+    nagios::service{ "check_ntp_${hostname}":
+        check_command => "check_ntp",
+        host_name => $fqdn,
+    }
 }
-
