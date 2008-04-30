@@ -186,7 +186,7 @@ class nagios::target::host {
 # defines
 define nagios::host(
     $ip = $fqdn, 
-    $nagios_alias = ${hostname}, 
+    $nagios_alias = $hostname, 
     $max_check_attempts = 4,
     $notification_interval = 120,
     $use = 'generic-host', 
