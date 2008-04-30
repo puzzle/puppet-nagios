@@ -202,7 +202,7 @@ define nagios::host(
         default => $parents
     }
     
-    @@nagios_host { host_${name}:
+    @@nagios_host {$name:
         ensure => present,
         address => $ip,
         alias => $nagios_alias,
