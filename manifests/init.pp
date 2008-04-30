@@ -250,7 +250,7 @@ define nagios::service(
 
     # this ensures nagios internal check, that every 
     # service has it's host
-    include nagios::target::host
+#    include nagios::target::host
 
     $real_nagios_contact_groups = $nagios_contact_groups_in ? {
         '' => 'admins',
