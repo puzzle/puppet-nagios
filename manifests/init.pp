@@ -237,7 +237,7 @@ define nagios::extra_host($ip, $nagios_alias, $host_use = 'generic-host', $paren
 
 define nagios::service(
     $check_command, 
-	$host_name = "host_${fqdn}, 
+	$host_name = $fqdn, 
     $use = 'generic-service',
     $notification_period = "24x7",
     $max_check_attempts = 4,
