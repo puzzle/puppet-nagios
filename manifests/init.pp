@@ -174,7 +174,12 @@ class nagios::target {
 }
 
 class nagios::target::host {
-    nagios::host { $fqdn: parents => $nagios_parent }
+    if defined(Nagios_host[$fqdn]) {
+        # do not define again
+    } else {
+        # define if not yet defined
+        nagios::host { $fqdn: parents => $nagios_parent }
+    }
 }
 
 # defines
