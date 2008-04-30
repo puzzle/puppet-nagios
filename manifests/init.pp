@@ -174,7 +174,7 @@ class nagios::target {
 }
 
 class nagios::target::host {
-    if defined(Host[$fqdn]) {
+    if defined(Nagios_host[$fqdn]) {
         # do not define again
         info("Nagios::host[$qdn] already defined. Won't define it again.")
     } else {
