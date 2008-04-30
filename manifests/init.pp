@@ -173,9 +173,9 @@ class nagios::target {
 }
 
 class nagios::target::host {
-    if defined(Nagios_host[$fqdn]) {
+    if defined(Nagios::host[$fqdn]) {
         # do not define again
-        info("Nagios_host[$qdn] already defined. Won't define it again.")
+        info("Nagios::host[$qdn] already defined. Won't define it again.")
     } else {
         # define if not yet defined
         nagios::host { $fqdn: parents => $nagios_parent }
@@ -249,7 +249,6 @@ define nagios::service(
 
     # this is required to pass nagios' internal checks:
     # every service needs to have a defined host
-    include nagios::target::host
 
     $real_nagios_contact_groups = $nagios_contact_groups_in ? {
         '' => 'admins',
