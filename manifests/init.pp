@@ -169,6 +169,7 @@ class nagios::centos inherits nagios::base {
 }
 
 class nagios::target {
+    include nagios::target::host
     nagios::service::ping{$fqdn:}
 }
 
@@ -247,8 +248,9 @@ define nagios::service(
     $nagios_contact_groups_in = $nagios_contact_groups,
     $service_description = ''){
 
-    # this is required to pass nagios' internal checks:
-    # every service needs to have a defined host
+    # this ensures nagios internal check, that every 
+    # service has it's host
+    include nagios::target::host
 
     $real_nagios_contact_groups = $nagios_contact_groups_in ? {
         '' => 'admins',
