@@ -186,7 +186,7 @@ class nagios::target::host {
 # defines
 define nagios::host(
     $ip = $fqdn, 
-    $nagios_alias = $fqdn, 
+    $nagios_alias = ${hostname}, 
     $max_check_attempts = 4,
     $notification_interval = 120,
     $use = 'generic-host', 
@@ -202,7 +202,7 @@ define nagios::host(
         default => $parents
     }
     
-    @@nagios_host { $name:
+    @@nagios_host { host_${name}:
         ensure => present,
         address => $ip,
         alias => $nagios_alias,
@@ -237,7 +237,7 @@ define nagios::extra_host($ip, $nagios_alias, $host_use = 'generic-host', $paren
 
 define nagios::service(
     $check_command, 
-	$host_name = $fqdn, 
+	$host_name = "host_${fqdn}, 
     $use = 'generic-service',
     $notification_period = "24x7",
     $max_check_attempts = 4,
