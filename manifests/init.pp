@@ -176,6 +176,7 @@ class nagios::target {
 class nagios::target::host {
     if defined(Nagios_host[$fqdn]) {
         # do not define again
+        info("Nagios_host[$qdn] already defined. Won't define it again.")
     } else {
         # define if not yet defined
         nagios::host { $fqdn: parents => $nagios_parent }
