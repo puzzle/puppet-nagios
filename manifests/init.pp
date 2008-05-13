@@ -117,7 +117,7 @@ class nagios::base {
     Nagios_serviceextinfo <<||>>
     Nagios_timeperiod <<||>>
 
-    if defined(Class["munin::client"]) {
+    if $use_munin {
         include munin::plugins::nagios
     }
 } # end nagios::base
