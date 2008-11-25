@@ -185,13 +185,7 @@ class nagios::target {
 }
 
 class nagios::target::host {
-    if defined(Nagios_host[$fqdn]) {
-        # do not define again
-        info("Nagios::host[$qdn] already defined. Won't define it again.")
-    } else {
-        # define if not yet defined
-        nagios::host { $fqdn: parents => $nagios_parent }
-    }
+    nagios::host { $fqdn: parents => $nagios_parent }
 }
 
 # defines
@@ -213,7 +207,7 @@ define nagios::host(
         default => $parents
     }
     
-    @@nagios_host {$name:
+    @@nagios_host { $name:
         ensure => present,
         address => $ip,
         alias => $nagios_alias,
