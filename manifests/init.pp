@@ -14,9 +14,7 @@
 # the Free Software Foundation.
 #
 
-# the directory containing all nagios configs:
-$nagios_cfgdir = '/var/lib/puppet/modules/nagios'
-modules_dir{ nagios: }
+import 'defines.pp'
 
 class nagios {
     case $operatingsystem {
@@ -111,6 +109,18 @@ class nagios::base {
             command_line => '$USER1$/check_dig -H $HOSTADDRESS$ -l $ARG1$ --record_type=$ARG2$';
         check_ntp:
             command_line => '$USER1$/check_ntp -H $HOSTADDRESS$ -w 0.5 -c 1';
+        check_http_url:
+            command_line => '$USER1$/check_http -H $ARG1$ -u $ARG2$';
+        check_http_url_regex:
+            command_line => '$USER1$/check_http -H $ARG1$ -u $ARG2$ -e $ARG3$';
+        check_https_url:
+            command_line => '$USER1$/check_http --ssl -H $ARG1$ -u $ARG2$';
+        check_https_url_regex:
+            command_line => '$USER1$/check_http --ssl -H $ARG1$ -u $ARG2$ -e $ARG3$';
+        check_https:
+            command_line => '$USER1$/check_http -S -H $HOSTADDRESS$';
+        check_silc:
+            command_line => '$USER1$/check_tcp -p 706 -H $ARG1$';
 	}
 
     Nagios_command <<||>>
@@ -132,7 +142,7 @@ class nagios::base {
 } # end nagios::base
 
 class nagios::centos inherits nagios::base {
-    package { [ 'nagios-plugins-smtp','nagios-plugins-http', 'nagios-plugins-ssh', 'nagios-plugins-udp', 'nagios-plugins-tcp', 'nagios-plugins-dig', 'nagios-plugins-nrpe', 'nagios-plugins-load', 'nagios-plugins-dns', 'nagios-plugins-ping', 'nagios-plugins-procs', 'nagios-plugins-users', 'nagios-plugins-ldap', 'nagios-plugins-disk', 'nagios-devel', 'nagios-plugins-swap', 'nagios-plugins-nagios', 'nagios-plugins-perl', 'nagios-plugins-ntp', 'nagios-plugins-snmp' ]:
+    package { [ 'nagios-plugins-smtp','nagios-plugins-http', 'nagios-plugins-ssh', 'nagios-plugins-udp', 'nagios-plugins-tcp', 'nagios-plugins-dig', 'nagios-plugins-nrpe', 'nagios-plugins-load', 'nagios-plugins-dns', 'nagios-plugins-ping', 'nagios-plugins-procs', 'nagios-plugins-users', 'nagios-plugins-ldap', 'nagios-plugins-disk', 'nagios-plugins-swap', 'nagios-plugins-nagios', 'nagios-plugins-perl', 'nagios-plugins-ntp', 'nagios-plugins-snmp' ]:
         ensure => 'present',
         notify => Service[nagios],
     }
@@ -176,134 +186,5 @@ class nagios::centos inherits nagios::base {
         source => "puppet://$server/nagios/configs/${operatingsystem}/private/resource.cfg.${architecture}",
         notify => Service[nagios],
         owner => root, group => nagios, mode => '0640';
-    }
-}
-
-class nagios::target {
-    include nagios::target::host
-    nagios::service::ping{$fqdn:}
-}
-
-class nagios::target::host {
-    nagios::host { $fqdn: parents => $nagios_parent }
-}
-
-# defines
-define nagios::host(
-    $ip = $fqdn, 
-    $nagios_alias = $hostname, 
-    $max_check_attempts = 4,
-    $notification_interval = 120,
-    $use = 'generic-host', 
-    $nagios_contact_groups_in = $nagios_contact_groups,
-    $parents = 'localhost' ) 
-{
-    $real_nagios_contact_groups = $nagios_contact_groups_in ? {
-        '' => 'admins',
-        default => $nagios_contact_groups_in
-    }
-    $real_nagios_parents = $parents ? {
-        '' => 'localhost',
-        default => $parents
-    }
-    
-    @@nagios_host { $name:
-        ensure => present,
-        address => $ip,
-        alias => $nagios_alias,
-        max_check_attempts => $max_check_attempts,
-        notification_interval => $notification_interval,
-        parents => $real_nagios_parents,
-        contact_groups => $real_nagios_contact_groups,
-        use => $use,
-        notify => Service[nagios],
-    }
-}
-
-# this will define a host which isn't managed by puppet. 
-# a ping serivce is automatically added
-# please note:
-# - you can use it only on the nagios master (no exported resources)
-# - you can not use this host for any other services!
-define nagios::extra_host($ip, $nagios_alias, $host_use = 'generic-host', $parents = 'localhost' ) {
-    nagios::host{$name:
-        ip => $ip, 
-        nagios_alias => $nagios_alias, 
-        use => $use, 
-        parents => $parents 
-    }
-    nagios_service { "check_ping_${name}":
-        check_command => "check_ping!100.0,20%!500.0,60%",
-        use => "generic-service",
-        host_name => $ip,
-        notification_period => "24x7",
-        service_description => "${alias}_check_ping",
-        notify => Service[nagios],
-   }
-}
-
-# just a wrapper to make the notify more easy
-define nagios::command( $command_line ){
-    nagios_command{$name:
-        command_line => $command_line,
-        notify => Service[nagios],
-    }
-}
-
-define nagios::service(
-    $check_command, 
-	$host_name = $fqdn, 
-    $use = 'generic-service',
-    $notification_period = "24x7",
-    $max_check_attempts = 4,
-    $retry_check_interval = 1,
-    $notification_interval = 960,
-    $normal_check_interval = 5,
-    $check_period = "24x7",
-    $nagios_contact_groups_in = $nagios_contact_groups,
-    $service_description = ''){
-
-    # this ensures nagios internal check, that every 
-    # service has it's host
-    include nagios::target::host
-
-    $real_nagios_contact_groups = $nagios_contact_groups_in ? {
-        '' => 'admins',
-        default => $nagios_contact_groups_in
-    }
-    @@nagios_service {$name:
-        check_command => $check_command,
-        use => $use,
-        host_name => $host_name,
-        notification_period => $notification_period,
-        max_check_attempts => $max_check_attempts,
-        retry_check_interval => $retry_check_interval,
-        notification_interval => $notification_interval,
-        normal_check_interval => $normal_check_interval,
-        contact_groups => $real_nagios_contact_groups,
-        check_period => $check_period,
-        notify => Service[nagios],
-    }
-    # if no service_description is set it is a namevar
-    case $service_description {
-        '': {}
-        default: {
-            Nagios_service[$name]{
-                service_description => $service_description,
-            }
-        }
-    }
-}
-
-define nagios::service::ping(){
-    nagios::service{ "check_ping_${hostname}":
-        check_command => "check_ping!100.0,20%!500.0,60%",
-    }
-}
-
-class nagios::service::ntp {
-    nagios::service{ "check_ntp_${hostname}":
-        check_command => "check_ntp",
-        host_name => $fqdn,
     }
 }
